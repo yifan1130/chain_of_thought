@@ -17,4 +17,4 @@
 #CUDA_VISIBLE_DEVICES=0 python eval_gsm8k_cot.py --model meta-llama/Llama-2-7b-hf --prompt_file lib_prompt/prompt_original.txt --batch_size 3 --max_new_tokens 128 --num_token 32 --max_value 0.3 --root_output_dir output_attn_clip_original
 #CUDA_VISIBLE_DEVICES=0 python eval_gsm8k_cot.py --model meta-llama/Llama-2-7b-hf --prompt_file lib_prompt/prompt_original.txt --batch_size 3 --max_new_tokens 128 --num_token 32 --max_value 0.4 --root_output_dir output_attn_clip_original
 
-CUDA_VISIBLE_DEVICES=0 python eval_gsm8k_cot.py --num_token -1 --max_value 0.3 --root_output_dir output_attn_clip_long_reason --model meta-llama/Llama-2-7b-hf --prompt_file lib_prompt/prompt_long_step_short_sent.txt --batch_size 3 --max_new_tokens 128
+CUDA_VISIBLE_DEVICES=0 python eval_gsm8k_cot.py --num_token 32 --max_value 0.2 --root_output_dir output_attn_clip_original_256 --model meta-llama/Llama-2-13b-hf --prompt_file lib_prompt/prompt_original.txt --batch_size 3 --max_new_tokens 256
