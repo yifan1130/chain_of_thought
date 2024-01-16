@@ -1,0 +1,2 @@
+python main.py humaneval --model_name llama --model_path meta-llama/Llama-2-13b-hf --num_token 2 --max_value 0.2
+python main.py mmlu --model_name llama --model_path meta-llama/Llama-2-13b-hf --num_token 2 --max_value 0.2
