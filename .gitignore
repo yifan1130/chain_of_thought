@@ -16,3 +16,4 @@ gsm8k/output_attn_clip_long_reason
 gsm8k/output_attn_clip_original
 gsm8k/output_attn_clip_original_256
 gsm8k/outputs
+instruct-eval/data
