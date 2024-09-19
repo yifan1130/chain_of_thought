@@ -251,33 +251,6 @@ if __name__ == "__main__":
 
 
 
-    prompt_cot+='\n'
-    cache_fuse_metadata = llm.llm_engine.model_executor.driver_worker.model_runner.model.model.cache_fuse_metadata
-    cache_fuse_metadata['collect'] = True
-    cache_fuse_metadata["check"] = False
-    num_layer = 32
-    chunk_past_key_values = []
-
-    cache_fuse_metadata["kv_dtype"] = None 
-    sampling_params = SamplingParams(temperature=0, max_tokens=1)
-
-    # Concatenate old KVs
-    
-    # prompts = tokenizer.encode(prompt_cot)
-    llm.generate(prompt_cot, sampling_params)
-    
-    llm_layers = llm.llm_engine.model_executor.driver_worker.model_runner.model.model.layers
-    for j in range(num_layer):
-        past_key_values = llm_layers[j].self_attn.hack_kv
-    
-        temp_k = past_key_values[0].clone() # do not chage with s_start_1
-        temp_v = past_key_values[1].clone()
-   
-        if cache_fuse_metadata["kv_dtype"] == None:
-            chunk_past_key_values.append([temp_k, temp_v])
-   
-    count = 0
-
     
     for batch in tqdm(dataloader, desc="Evaluate GSM8K"):
         current_bsz = len(batch['question'])
@@ -286,112 +259,10 @@ if __name__ == "__main__":
         answers = batch["answer"]
         prompts = [prompt_cot+'Question: '+question+'\n' for question in questions]
 
-        inputs = tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding="longest",
-            truncation=True,
-        )
-        inputs = inputs.to("cuda")
-        generate_kwargs = dict(
-            return_dict_in_generate=True,
-            max_length=args.max_length,
-            max_new_tokens=args.max_new_tokens,
-            output_scores=True,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-        if args.do_sample:
-            generate_kwargs["do_sample"] = True
-            generate_kwargs["temperature"] = args.temperature 
-            generate_kwargs["top_k"] = args.top_k
-            generate_kwargs["top_p"] = args.top_p
-        else:
-            generate_kwargs["do_sample"] = False
-            generate_kwargs["temperature"] = None 
-            generate_kwargs["top_k"] = None 
-            generate_kwargs["top_p"] = None
-
-        ###Revision
-        # generate_kwargs["num_token"] = args.num_token
-        
-        # outputs = model.generate(**inputs, **generate_kwargs)
-        # generations = tokenizer.batch_decode(
-        #     outputs.sequences[:, inputs.input_ids.shape[1] :],
-        #     skip_special_tokens=True,
-        # )
-
-
-
-        cache_fuse_metadata['collect'] = False
-        cache_fuse_metadata['check'] = True
-
-        input_prompts = []
-        input_prompts_lens = []
-        suffix_lens = []
-        batched_past_key_values = []
-        for idx in range(current_bsz):
-            input_prompts.append(prompt_cot)
-            # input_prompts_lens.append(len(tokenizer.encode()))
-            # suffix_lens.append(suffix_len)    
-            question_prompt = tokenizer.encode('Question: '+questions[idx]+'\n')
-            suffix_len = len(question_prompt) 
-            # print(suffix_len)
-            for j in range(32):
-                if idx == 0:
-                    batched_past_key_values.append([chunk_past_key_values[j][0], chunk_past_key_values[j][1]])
-                else:
-                    batched_past_key_values[j][0] = torch.cat((batched_past_key_values[j][0],chunk_past_key_values[j][0]), dim=0)
-                    batched_past_key_values[j][1] = torch.cat((batched_past_key_values[j][1],chunk_past_key_values[j][1]), dim=0)
-            
-            for j in range(32):
-                cached_key = chunk_past_key_values[0][0]
-
-                fake_k_question = torch.rand(suffix_len, cached_key.shape[1],device = cached_key.device,dtype=cached_key.dtype)
-                fake_v_question = torch.rand(suffix_len, cached_key.shape[1],device = cached_key.device,dtype=cached_key.dtype)  
-
-                batched_past_key_values[j][0] = torch.cat((batched_past_key_values[j][0],fake_k_question), dim=0)
-                batched_past_key_values[j][1] = torch.cat((batched_past_key_values[j][1],fake_v_question), dim=0)
-                
-        
-        input_prompts_lens = [len(tokenizer.encode(p)) for p in prompts]
-        suffix_lens = [len(tokenizer.encode('Question: '+question+'\n')) for question in questions]
-        cache_fuse_metadata['input_list'] = input_prompts_lens
-        cache_fuse_metadata['suffix_len_list'] = suffix_lens
-        # print(suffix_lens)
-        # print(input_prompts_lens)
-        # print(len(tokenizer.encode(prompt_cot))) 
-        # print(len(tokenizer.encode(prompts[0]))) #[prompt_cot+'\nQuestion: '+question+'\n' for question in questions]
-        
-        # print(tokenizer.encode(prompt_cot))
-        # print(tokenizer.encode('\nQuestion: '+questions[0]+'\n'))
-        # print(tokenizer.encode(prompts[0])[820:840])
-        # print(tokenizer.encode(prompts[0]))
-
-        # print(len(tokenizer.encode(prompt_cot)))
-        # print(len(tokenizer.encode('\nQuestion: '+questions[0]+'\n')))
-        # print(len(tokenizer.encode(prompts[0])))
-        # print("="*80)
-        def create_input_len(input_list):
-            input_len_list = []
-            start = 0
-            for element in reversed(input_list):
-                input_len_list.insert(0, start)
-                start = start+element
-            return input_len_list
-        cache_fuse_metadata['input_len_list'] = create_input_len(cache_fuse_metadata['input_list'])
-        cache_fuse_metadata['check_layers'] = [0]
-        llm.llm_engine.model_executor.driver_worker.model_runner.model.model.old_kvs = batched_past_key_values
 
         sampling_params = SamplingParams(temperature=0, max_tokens=args.max_new_tokens)
         # print(prompts)
         output = llm.generate(prompts, sampling_params)
-
-
-        # del chunk_past_key_values
-        del batched_past_key_values
-        import gc
-        gc.collect()
-        torch.cuda.empty_cache()
 
         generations = []
         for o in output:
@@ -418,7 +289,7 @@ if __name__ == "__main__":
             all_samples.append(sample)
 
 
-        count+=current_bsz
+        # count+=current_bsz
         # if count>100:
         #     break
     accuracy = sum([sample.is_pred_true for sample in all_samples])/len(all_samples)
